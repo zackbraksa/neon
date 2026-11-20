@@ -1,3 +1,5 @@
+<img src="Assets/AbstractNeonIcon.png" alt="Neon app icon" width="96">
+
 # Neon
 
 Neon is a native AI chat app for iPhone, iPad, and Mac. Use OpenRouter with a self-hosted Neon backend, or connect to Ollama on your Mac.
