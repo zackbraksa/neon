@@ -1,4 +1,6 @@
-<img src="Assets/AbstractNeonIcon.png" alt="Neon app icon" width="96">
+<p align="center">
+  <img src="docs/neon-icon.png" alt="Neon app icon" width="120">
+</p>
 
 # Neon
 
