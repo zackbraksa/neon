@@ -1,0 +1,6 @@
+Use case: background-extraction. Remove ONLY the black background from the attached OpenChat icon. Preserve the exact neon-green glass ribbon loop, silhouette, proportions, scale, position, highlights, green surfaces and internal glass intersections. Keep same square canvas. Empty outside canvas and central hole must be genuinely transparent alpha. Do not redraw, crop, enlarge, or reposition. No black matte, checkerboard, shadow or extra objects. Retain dark green material belonging to ribbons. Clean alpha edges.
+
+Generated with built-in imagegen using AbstractNeonIcon.png as the edit target and transparent_background enabled.
+
+Final cleanup edit applied to the initial extracted foreground, transparent_background enabled:
+Clean this transparent icon cutout. Remove all stray neon speckles and detached pixels outside the two glass ribbons and inside the central hole. Preserve the smooth original ribbon contour and its internal surfaces exactly; do not change size, position or canvas. Make outside and hole completely transparent with crisp smooth antialiased edges. No speckles, haze, matte or artifacts. Keep exact original geometry and colors.

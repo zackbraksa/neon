@@ -1,0 +1,58 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.00000,0.00000,0.00000,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.00000,0.00000,0.00000,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name-specializations": [
+            {
+              "value": "Default.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "Default.png"
+            },
+            {
+              "appearance": "tinted",
+              "value": "Foreground.png"
+            }
+          ],
+          "name": "Neon ribbon",
+          "glass-specializations": [
+            {
+              "value": false
+            },
+            {
+              "appearance": "tinted",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

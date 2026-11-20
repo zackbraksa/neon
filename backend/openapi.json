@@ -1,0 +1,2137 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Neon conversation and key allowance API",
+    "version": "1.0.0",
+    "description": "Scoped description of conversation metadata, archive browsing, permanent deletion, message image inputs, reasoning effort and key allowance endpoints. Other Neon routes are documented in README.md."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/v1/settings/openrouter-allowance": {
+      "get": {
+        "summary": "Read the current workspace API key spending allowance",
+        "description": "Amounts are USD key-limit amounts, not account credits. No provider key returns configured=false and null amounts without an upstream request. A null limit means no key limit.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity; mismatches are rejected before reading a provider key.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key allowance; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configured",
+                    "limit",
+                    "remaining"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "remaining": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Workspace pin mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "OpenRouter rejected the configured provider key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Neon or upstream rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream timeout, malformed response or temporary unavailability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/threads": {
+      "post": {
+        "summary": "Create a conversation",
+        "description": "Existing-ID retries return unchanged original metadata. Pin defaults to false.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "title"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Trimmed before validation. Must contain 1 to 200 UTF-16 code units after trimming."
+                  },
+                  "pinned": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current thread metadata; pinned is integer 0 or 1 in responses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "pinned",
+                    "revision",
+                    "workspaceId",
+                    "created",
+                    "archived",
+                    "paused"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "archived": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "paused": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Malformed request or title not 1 to 200 UTF-16 code units after trimming"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Invalid Neon authentication"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Conversation missing or belongs to another workspace"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Workspace identity pin mismatch"
+          },
+          "410": {
+            "description": "Conversation ID was permanently deleted; stale create retries cannot resurrect it."
+          }
+        }
+      },
+      "get": {
+        "summary": "List active or archived conversations",
+        "description": "Without archived=true returns only active conversations, preserving the default sync contract. archived=true returns only archived conversations in the authenticated workspace.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "description": "Return archived-only instead of active-only.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "default": "false"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace-scoped result; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "title",
+                      "pinned",
+                      "revision",
+                      "workspaceId",
+                      "created",
+                      "archived",
+                      "paused"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "workspaceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "pinned": {
+                        "type": "integer",
+                        "enum": [
+                          0,
+                          1
+                        ]
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "created": {
+                        "type": "integer"
+                      },
+                      "archived": {
+                        "type": "integer",
+                        "enum": [
+                          0,
+                          1
+                        ]
+                      },
+                      "paused": {
+                        "type": "integer",
+                        "enum": [
+                          0,
+                          1
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed UUID, unknown query parameter or query value other than true/false; repeated query values are rejected."
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}": {
+      "patch": {
+        "summary": "Rename or pin an existing conversation",
+        "description": "At least one property is required. A metadata change increments revision once; an identical update leaves revision unchanged. Archived conversations cannot be updated.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Trimmed before validation. Must contain 1 to 200 UTF-16 code units after trimming."
+                  },
+                  "pinned": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current thread metadata; pinned is integer 0 or 1 in responses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "pinned",
+                    "revision",
+                    "workspaceId",
+                    "created",
+                    "archived",
+                    "paused"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "archived": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "paused": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Malformed request or title not 1 to 200 UTF-16 code units after trimming"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Invalid Neon authentication"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Conversation missing or belongs to another workspace"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Workspace identity pin mismatch"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Conversation is archived"
+          }
+        }
+      },
+      "get": {
+        "summary": "Read a conversation and its jobs",
+        "description": "Archived conversations are read-only and require includeArchived=true. This flag never enables mutation or resumes work.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "description": "Permit read-only snapshots of archived conversations.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "default": "false"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace-scoped result; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "pinned",
+                    "revision",
+                    "workspaceId",
+                    "created",
+                    "archived",
+                    "paused",
+                    "jobs"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "archived": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "paused": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "threadId",
+                          "workspaceId",
+                          "position",
+                          "prompt",
+                          "model",
+                          "status",
+                          "content",
+                          "error",
+                          "created",
+                          "updated"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "threadId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "workspaceId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "position": {
+                            "type": "integer"
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "running",
+                              "complete",
+                              "stopped",
+                              "failed"
+                            ]
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created": {
+                            "type": "integer"
+                          },
+                          "updated": {
+                            "type": "integer"
+                          },
+                          "responseModel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 200,
+                            "description": "Provider-reported routed model, independent of the requested model."
+                          },
+                          "inputTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "outputTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "totalTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "costUSD": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "description": "Cost reported by OpenRouter in USD. Never estimated."
+                          },
+                          "reasoningEffort": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "none",
+                              "minimal",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh",
+                              "max",
+                              null
+                            ],
+                            "description": "Requested effort captured at submission; null uses the provider default. Legacy backends may omit it."
+                          },
+                          "images": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 2796227,
+                              "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                            },
+                            "description": "Stored user images in their original order. Legacy backends may omit this field; omission means no images."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed UUID, unknown query parameter or query value other than true/false; repeated query values are rejected."
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          },
+          "404": {
+            "description": "Conversation does not exist in this workspace"
+          },
+          "410": {
+            "description": "Conversation is archived and includeArchived=true was not provided"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Permanently delete a conversation",
+        "description": "Deletes active or archived conversation history, jobs and notification rows. Aborts running generation. Retains only the conversation ID and workspace ID to reject stale creation retries. Repeated deletion of the same workspace-owned ID succeeds. Database backups and already delivered notifications are not erased.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid conversation UUID"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Conversation unknown or owned by another workspace"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          }
+        }
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "summary": "Read workspace capabilities",
+        "description": "conversationMetadata=true enables Pin and Rename. Older backends omit this field; clients treat omission as unsupported. reasoningEffort=true enables optional per-message reasoning effort. Older backends omit it; clients must omit the request field when unsupported. conversationDeletion=true enables permanent deletion; older backends omit it and clients keep deletion unavailable for synced conversations.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace identity and supported features",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "serverId",
+                    "push",
+                    "backgroundJobs",
+                    "conversationMetadata",
+                    "archiveBrowsing",
+                    "reasoningEffort",
+                    "conversationDeletion"
+                  ],
+                  "properties": {
+                    "serverId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "push": {
+                      "type": "boolean"
+                    },
+                    "backgroundJobs": {
+                      "type": "boolean"
+                    },
+                    "conversationMetadata": {
+                      "type": "boolean"
+                    },
+                    "archiveBrowsing": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "reasoningEffort": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "conversationDeletion": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "imageInputs": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}/restore": {
+      "post": {
+        "summary": "Restore an archived conversation",
+        "description": "Idempotently clears archived and increments revision once only on a change. Returns the canonical snapshot with jobs. Preserves title, pin, pause state, job IDs, statuses and text. Does not enqueue, resume, call a provider or create notifications.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace-scoped result; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "pinned",
+                    "revision",
+                    "workspaceId",
+                    "created",
+                    "archived",
+                    "paused",
+                    "jobs"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "archived": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "paused": {
+                      "type": "integer",
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "threadId",
+                          "workspaceId",
+                          "position",
+                          "prompt",
+                          "model",
+                          "status",
+                          "content",
+                          "error",
+                          "created",
+                          "updated"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "threadId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "workspaceId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "position": {
+                            "type": "integer"
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "running",
+                              "complete",
+                              "stopped",
+                              "failed"
+                            ]
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created": {
+                            "type": "integer"
+                          },
+                          "updated": {
+                            "type": "integer"
+                          },
+                          "responseModel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 200,
+                            "description": "Provider-reported routed model, independent of the requested model."
+                          },
+                          "inputTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "outputTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "totalTokens": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "costUSD": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "description": "Cost reported by OpenRouter in USD. Never estimated."
+                          },
+                          "reasoningEffort": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "none",
+                              "minimal",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh",
+                              "max",
+                              null
+                            ],
+                            "description": "Requested effort captured at submission; null uses the provider default. Legacy backends may omit it."
+                          },
+                          "images": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 2796227,
+                              "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                            },
+                            "description": "Stored user images in their original order. Legacy backends may omit this field; omission means no images."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed UUID, unknown query parameter or query value other than true/false; repeated query values are rejected."
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          },
+          "404": {
+            "description": "Conversation does not exist in this workspace"
+          }
+        }
+      }
+    },
+    "/v1/jobs/{id}": {
+      "get": {
+        "summary": "Read a durable job including reported model and usage",
+        "description": "model remains the requested model. responseModel is provider-reported. Usage/cost fields are nullable and absent or null on legacy jobs or when unavailable; zero is meaningful. Interrupted jobs retain valid metadata already reported. No price estimate or extra billing lookup is made.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable job snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "threadId",
+                    "workspaceId",
+                    "position",
+                    "prompt",
+                    "model",
+                    "status",
+                    "content",
+                    "error",
+                    "created",
+                    "updated"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "position": {
+                      "type": "integer"
+                    },
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "complete",
+                        "stopped",
+                        "failed"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "responseModel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200,
+                      "description": "Provider-reported routed model, independent of the requested model."
+                    },
+                    "inputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "outputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "totalTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "costUSD": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "description": "Cost reported by OpenRouter in USD. Never estimated."
+                    },
+                    "reasoningEffort": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "none",
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        null
+                      ],
+                      "description": "Requested effort captured at submission; null uses the provider default. Legacy backends may omit it."
+                    },
+                    "images": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 2796227,
+                        "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                      },
+                      "description": "Stored user images in their original order. Legacy backends may omit this field; omission means no images."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid job ID or stream cursor"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "404": {
+            "description": "Job not found in this workspace"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          }
+        }
+      }
+    },
+    "/v1/jobs/{id}/events": {
+      "get": {
+        "summary": "Stream job deltas and status with full response metadata",
+        "description": "SSE status events carry the JSON schema in x-status-event-schema and are emitted initially, on status or metadata changes, and before terminal close. Reconnect receives current full metadata even if no text delta remains. Delta event IDs remain UTF-16 content offsets; metadata events do not advance the cursor.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "description": "Expected workspace identity.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Committed UTF-16 content offset."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE frames: event: status with JSON data; event: delta with jobId, offset and text",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid job ID or stream cursor"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "404": {
+            "description": "Job not found in this workspace"
+          },
+          "409": {
+            "description": "Workspace identity mismatch"
+          }
+        },
+        "x-status-event-schema": {
+          "type": "object",
+          "required": [
+            "jobId",
+            "status",
+            "error"
+          ],
+          "properties": {
+            "jobId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "complete",
+                "stopped",
+                "failed"
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "responseModel": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 200,
+              "description": "Provider-reported routed model, independent of the requested model."
+            },
+            "inputTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "outputTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "totalTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "costUSD": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Cost reported by OpenRouter in USD. Never estimated."
+            }
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}/messages": {
+      "post": {
+        "summary": "Durably accept text and optional inline images",
+        "description": "Omission preserves provider defaults. Retry the same job ID and immutable thread, prompt, model and effort; conflicting retries return 409. Explicit none differs from omission. Queues and restarts retain the captured effort. Forks inherit the original target effort. This capability does not guarantee every provider supports every effort. Optional images preserves attachment order. Omission equals [] for retries. A prompt may be empty when images are attached. This route accepts a maximum 12 MiB JSON body. Provider history is limited to 16 MiB decoded image data and fails explicitly without a provider call if exceeded; attachments are never silently dropped. Send images only when capabilities advertise imageInputs:true.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "prompt",
+                  "model"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[a-zA-Z0-9._:/-]+$"
+                  },
+                  "steer": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  "images": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2796227,
+                      "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                    },
+                    "description": "Inline PNG/JPEG base64 data URLs only, at most 2 MiB decoded per image. Canonical strict base64 and matching image signatures are validated; remote URLs are rejected."
+                  }
+                },
+                "anyOf": [
+                  {
+                    "properties": {
+                      "prompt": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "images"
+                    ],
+                    "properties": {
+                      "images": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably stored job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "threadId",
+                    "workspaceId",
+                    "position",
+                    "prompt",
+                    "model",
+                    "status",
+                    "content",
+                    "error",
+                    "created",
+                    "updated"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "position": {
+                      "type": "integer"
+                    },
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "complete",
+                        "stopped",
+                        "failed"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "responseModel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200,
+                      "description": "Provider-reported routed model, independent of the requested model."
+                    },
+                    "inputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "outputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "totalTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "costUSD": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "description": "Cost reported by OpenRouter in USD. Never estimated."
+                    },
+                    "reasoningEffort": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "none",
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        null
+                      ],
+                      "description": "Requested effort captured at submission; null uses the provider default. Legacy backends may omit it."
+                    },
+                    "images": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 2796227,
+                        "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                      },
+                      "description": "Stored user images in their original order. Legacy backends may omit this field; omission means no images."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or unsupported effort"
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "404": {
+            "description": "Thread or job ID belongs to another workspace or does not exist"
+          },
+          "409": {
+            "description": "Conflicting immutable retry, workspace mismatch or missing provider key"
+          },
+          "410": {
+            "description": "Archived thread"
+          },
+          "429": {
+            "description": "Request or queue limit"
+          },
+          "413": {
+            "description": "JSON body exceeds 12 MiB"
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}/fork": {
+      "post": {
+        "summary": "Fork a conversation while preserving prior images",
+        "description": "The original conversation remains unchanged. Prior completed or partial turns retain their images. The edited turn inherits target images when images is omitted; explicit [] removes them and a nonempty array replaces them. Empty prompt requires resulting images. Maximum JSON body is 12 MiB. An existing branch or job ID returns 409; fetch the deterministic branch and compare the immutable prompt and images before considering retry recovery successful.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-OpenChat-Server-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "targetJobId",
+                  "threadId",
+                  "jobId",
+                  "prompt"
+                ],
+                "properties": {
+                  "targetJobId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "threadId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "jobId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "images": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2796227,
+                      "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                    },
+                    "description": "Inline PNG/JPEG base64 data URLs only, at most 2 MiB decoded per image. Canonical strict base64 and matching image signatures are validated; remote URLs are rejected."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably stored fork target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "threadId",
+                    "workspaceId",
+                    "position",
+                    "prompt",
+                    "model",
+                    "status",
+                    "content",
+                    "error",
+                    "created",
+                    "updated"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "position": {
+                      "type": "integer"
+                    },
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "complete",
+                        "stopped",
+                        "failed"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "responseModel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200,
+                      "description": "Provider-reported routed model, independent of the requested model."
+                    },
+                    "inputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "outputTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "totalTokens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "costUSD": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "description": "Cost reported by OpenRouter in USD. Never estimated."
+                    },
+                    "reasoningEffort": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "none",
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        null
+                      ],
+                      "description": "Requested effort captured at submission; null uses the provider default. Legacy backends may omit it."
+                    },
+                    "images": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 2796227,
+                        "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$"
+                      },
+                      "description": "Stored user images in their original order. Legacy backends may omit this field; omission means no images."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid prompt or image payload"
+          },
+          "401": {
+            "description": "Missing or invalid Neon authentication"
+          },
+          "404": {
+            "description": "Source conversation, target or IDs belong to another workspace or do not exist"
+          },
+          "409": {
+            "description": "Branch/job already exists or workspace identity mismatch"
+          },
+          "410": {
+            "description": "Source conversation archived"
+          },
+          "413": {
+            "description": "JSON body exceeds 12 MiB"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Neon device-session token or legacy owner credential"
+      }
+    }
+  }
+}

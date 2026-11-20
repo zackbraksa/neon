@@ -1,0 +1,5 @@
+# Neon
+
+Read README.md before edits. Shared native SwiftUI app for iOS 17+ and macOS 14+; generate the Xcode project from project.yml with XcodeGen. Keep API keys in Keychain. Never include queued messages in a current request, and preserve the user/assistant order when completing queued turns. Stale callbacks must pass the conversation's active request ID guard. Editing must preserve the original branch. Run the README macOS tests and iOS simulator build on a Mac; do not claim Apple validation from Linux.
+
+DirectChatStore owns direct mode; RemoteChatStore owns backend sync and the durable client outbox. ChatStore is the UI facade. Keep direct and endpoint/server-identity caches separate. Backgrounding in backend mode disconnects subscribers and must never call stop. Retry sends with immutable IDs/payloads, validate job/offset identity before applying stream deltas, and preserve pending notification taps until the matching server can open the chat. Use scripts/verify-apple.sh on a Mac for native verification.
