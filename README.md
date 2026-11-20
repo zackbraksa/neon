@@ -2,6 +2,8 @@
 
 Neon is a native AI chat app for iPhone, iPad, and Mac. Use OpenRouter with a self-hosted Neon backend, or connect to Ollama on your Mac.
 
+![Neon on macOS showing the conversation sidebar, model picker, and chat composer](docs/neon-macos.png)
+
 - Branch a conversation by editing an earlier prompt while keeping the original.
 - Queue follow-up messages while a reply is running.
 - Sync OpenRouter chats across devices and let replies finish in the background.
