@@ -4,6 +4,10 @@
 
 Neon is a native AI chat app for iPhone, iPad, and Mac. Use OpenRouter with a self-hosted Neon backend, or connect to Ollama on your Mac.
 
+**[Download Neon for Mac](https://github.com/zackbraksa/neon/releases/download/v1.0.0/Neon-1.0.0-macOS.zip)**
+
+Unzip the download and move **Neon.app** to Applications. Requires macOS 14 or later. The download supports Apple silicon and Intel Macs.
+
 ![Neon on macOS showing the conversation sidebar, model picker, and chat composer](docs/neon-macos.png)
 
 - Branch a conversation by editing an earlier prompt while keeping the original.
