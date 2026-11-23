@@ -266,6 +266,30 @@ private final class OllamaURLProtocol: URLProtocol {
         XCTAssertEqual(storage.saves, 0)
         XCTAssertNil(storage.saved)
     }
+    func testFirstOpenRouterConnectionFromOllamaDefaultsToAuto() async throws {
+        let storage = FakeBackendSessionStorage()
+        var credentials = try BackendCredentials(address: NeonBackend.address, token: String(repeating: "synthetic", count: 5))
+        credentials.serverID = UUID()
+        let remote = try RemoteChatStore(client: BackendClient(credentials, session: session),
+                                         directory: directory.appendingPathComponent("remote"))
+        let direct = DirectChatStore(storage: try ConversationDisk(directory: directory.appendingPathComponent("legacy")), readKey: { "" })
+        let facade = ChatStore(direct: direct, sessions: storage, push: storage.pushCoordinator(), ollama: try local(),
+                               makeRemote: { _ in remote }, createSession: { _, _ in credentials })
+        facade.useOllama()
+        let localID = try XCTUnwrap(facade.selectedID)
+        facade.chooseModel("ollama://test:latest", for: localID)
+        facade.setDraft(localID, text: "Local draft")
+
+        let connected = await facade.saveProviderKey("synthetic-openrouter-key")
+        XCTAssertTrue(connected)
+        XCTAssertFalse(facade.isLocalConversation)
+        if facade.selectedID == nil { facade.newChat() }
+
+        let activeID = try XCTUnwrap(facade.selectedID)
+        XCTAssertEqual(facade.chat(activeID)?.model, "openrouter/auto")
+        XCTAssertEqual(facade.chat(localID)?.model, "ollama://test:latest")
+        XCTAssertEqual(facade.chat(localID)?.draft, "Local draft")
+    }
     func testRemoteNotificationNavigatesAwayFromSelectedOllamaChat() async throws {
         let suite = "Neon.OllamaNotificationTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage("display-name") private var displayName = ""
     @State private var key = ""
+    @State private var keySaved = false
     @State private var busy = false
     @State private var allowanceRefresh = 0
     @State private var path: [Topic] = []
@@ -42,6 +43,7 @@ struct SettingsView: View {
                     } else {
                         keyEditor
                     }
+                    if keySaved { keySavedMessage }
                 }
                 Section("Preferences") {
                     NavigationLink(value: Topic.personalization) {
@@ -69,12 +71,15 @@ struct SettingsView: View {
         .disabled(busy)
         .interactiveDismissDisabled(busy)
         .overlay { if busy { ProgressView("Saving…").padding().background(.regularMaterial, in: .rect(cornerRadius: 12)) } }
-        .alert("Neon", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+        .alert("Neon", isPresented: Binding(get: { !busy && store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
         .confirmationDialog("Remove API key for all devices?", isPresented: $confirmKeyRemoval, titleVisibility: .visible) {
             Button("Remove API key", role: .destructive) {
-                run { if await store.saveProviderKey("") { allowanceRefresh += 1 } }
+                run {
+                    keySaved = false
+                    if await store.saveProviderKey("") { allowanceRefresh += 1 }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -135,6 +140,7 @@ struct SettingsView: View {
         Form {
             Section {
                 keyEditor
+                if keySaved { keySavedMessage }
             }
             Section {
                 allowanceRow
@@ -173,7 +179,17 @@ struct SettingsView: View {
                 .font(ChatAppearance.caption).foregroundStyle(.secondary)
             keyActionsLayout {
                 Button("Save API key") {
-                    run { if await store.saveProviderKey(key) { key = ""; allowanceRefresh += 1 } }
+                    run {
+                        keySaved = false
+                        if await store.saveProviderKey(key) {
+                            key = ""
+                            keySaved = true
+                            allowanceRefresh += 1
+                        } else if store.error == nil {
+                            if case .failed(let message) = store.bootstrap { store.error = message }
+                            else { store.error = "Saving was interrupted. Try again." }
+                        }
+                    }
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .foregroundStyle(busy || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? ChatAppearance.muted : ChatAppearance.canvas)
@@ -182,6 +198,11 @@ struct SettingsView: View {
                     .foregroundStyle(ChatAppearance.accent).frame(minHeight: 44)
             }
         }.padding(.vertical, 4)
+            .onChange(of: key) { if !key.isEmpty { keySaved = false } }
+    }
+    private var keySavedMessage: some View {
+        Label("OpenRouter API key saved", systemImage: "checkmark.circle")
+            .font(ChatAppearance.caption).foregroundStyle(ChatAppearance.accent)
     }
     private func settingsRow(_ title: String, icon: String, status: String? = nil) -> some View {
         keyActionsLayout {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BackendConnectionView: View {
     @Bindable var store: ChatStore
+    let onKeySaved: () -> Void
     @State private var key = ""
 
     var body: some View {
@@ -44,8 +45,13 @@ struct BackendConnectionView: View {
                 .font(ChatAppearance.caption).foregroundStyle(.secondary)
             #endif
             HStack(spacing: 16) {
-                Button("Save API key") {
-                    Task { if await store.saveProviderKey(key) { key = "" } }
+                Button(store.isConnecting ? "Saving API key…" : "Save API key") {
+                    Task {
+                        if await store.saveProviderKey(key) {
+                            key = ""
+                            onKeySaved()
+                        }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .foregroundStyle(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isConnecting ? ChatAppearance.muted : ChatAppearance.canvas)

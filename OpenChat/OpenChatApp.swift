@@ -41,6 +41,7 @@ struct OpenChatApp: App {
             }
         }
         #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1100, height: 780)
         #endif
     }

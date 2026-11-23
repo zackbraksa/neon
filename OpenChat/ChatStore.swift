@@ -323,7 +323,12 @@ final class ChatStore {
                 throw RouterError(message: "This key opens a different workspace. Enter the key for your current chats.")
             }
             let replacement = try makeRemote(credentials)
-            try sessions.saveConnection(credentials)
+            do { try sessions.saveConnection(credentials) }
+            catch {
+                throw RouterError(message: "Neon couldn’t save this device’s session in Keychain. Unlock Keychain or allow access if prompted, then try again.")
+            }
+            replacement.hasKey = true
+            if remote == nil { localSelected = false }
             remote?.suspend()
             remote = replacement
             bootstrap = nil
@@ -334,7 +339,7 @@ final class ChatStore {
             guard connectionGeneration == generation else { return false }
             let message = "Could not connect. \(error.localizedDescription)"
             bootstrap = .failed(message)
-            if remote != nil { ownError = message }
+            if localAccess { ownError = message }
             return false
         }
     }
@@ -347,12 +352,30 @@ final class ChatStore {
             guard connectionGeneration == generation, self.remote === remote else { return false }
             remote.hasKey = state.configured
             remote.invalidateKeyAllowance()
+            guard state.configured == !key.isEmpty else {
+                ownError = key.isEmpty
+                    ? "Neon couldn’t confirm that your API key was removed. Try again."
+                    : "Neon couldn’t confirm that your API key was saved. Try again."
+                return false
+            }
             await remote.retryPending()
             return true
         } catch {
             guard connectionGeneration == generation, self.remote === remote else { return false }
-            if let failure = error as? BackendFailure, failure.status == 401 { remote.requireAuthentication() }
-            ownError = error.localizedDescription
+            switch (error as? BackendFailure)?.status {
+            case 400: ownError = "Enter a valid OpenRouter API key."
+            case 401:
+                remote.requireAuthentication()
+                ownError = "Your Neon session expired. Enter your OpenRouter API key again to reconnect."
+            case 409: ownError = "This key belongs to another workspace. Enter the key for your current chats."
+            case 422: ownError = "OpenRouter rejected this API key. Check it and try again."
+            case 429: ownError = "Too many attempts. Wait a moment and try again."
+            case 503: ownError = "Neon couldn’t verify your key right now. Try again shortly."
+            default:
+                ownError = error is URLError
+                    ? "Neon couldn’t reach the server. Check your connection and try again."
+                    : "Neon couldn’t finish the request. Try again."
+            }
             return false
         }
     }
@@ -396,7 +419,9 @@ final class ChatStore {
         if sessionCreation != nil {
             connectionGeneration = UUID()
             sessionCreation?.cancel(); sessionCreation = nil
-            bootstrap = .needsKey
+            let message = "Saving was interrupted. Try again."
+            bootstrap = .failed(message)
+            if localAccess { ownError = message }
         }
         remote?.suspend()
         direct.pauseAll()

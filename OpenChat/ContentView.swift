@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var drawer = false
     @State private var sidebar = true
     @State private var showArchived = false
+    @State private var keySaved = false
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= 900
@@ -34,7 +35,7 @@ struct ContentView: View {
                     }
                     Group {
                         if store.needsBackendConnection {
-                            BackendConnectionView(store: store)
+                            BackendConnectionView(store: store) { keySaved = true }
                         } else if let id = store.selectedID, store.chat(id) != nil {
                             ChatView(store: store, id: id,
                                      drawerPresented: drawer && !wide,
@@ -95,6 +96,11 @@ struct ContentView: View {
         .sheet(isPresented: $settings) { SettingsView(store: store) }
         .sheet(isPresented: $models) {
             if let id = store.selectedID { ModelPicker(store: store, id: id) }
+        }
+        .alert("OpenRouter API key saved", isPresented: $keySaved) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("New OpenRouter chats start on Auto.")
         }
         .alert("Neon", isPresented: Binding(get: { store.error != nil && !settings && !models }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }

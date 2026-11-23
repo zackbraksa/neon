@@ -80,14 +80,14 @@ private final class SessionURLProtocol: URLProtocol {
         result.serverID = pin
         return result
     }
-    private func makeStore(_ storage: FakeBackendSessionStorage,
+    private func makeStore(_ storage: FakeBackendSessionStorage, ollama: DirectChatStore? = nil,
                            create: ((String, UUID) async throws -> BackendCredentials)? = nil,
                            restored: ((BackendCredentials) -> Void)? = nil) throws -> ChatStore {
         let direct = DirectChatStore(storage: try ConversationDisk(directory: directory.appendingPathComponent("direct")), readKey: { "" }, router: OpenRouter(session: session))
         let session = session!
         let root = directory!
         let client = BackendSessionClient(session: session)
-        let store = ChatStore(direct: direct, sessions: storage, push: storage.pushCoordinator(), makeRemote: { credentials in
+        let store = ChatStore(direct: direct, sessions: storage, push: storage.pushCoordinator(), ollama: ollama, makeRemote: { credentials in
             restored?(credentials)
             let namespace = RemoteChatStore.namespace(credentials.url, serverID: credentials.serverID)
             return try RemoteChatStore(client: BackendClient(credentials, session: session), directory: root.appendingPathComponent(namespace))
@@ -133,6 +133,7 @@ private final class SessionURLProtocol: URLProtocol {
         let store = try makeStore(storage)
         let connected = await store.saveProviderKey("synthetic-openrouter-key")
         XCTAssertTrue(connected)
+        XCTAssertTrue(store.hasKey)
         XCTAssertEqual(storage.saved, issued)
         XCTAssertNotEqual(storage.saved?.token, "synthetic-openrouter-key")
         let request = try XCTUnwrap(log.requests.first)
@@ -182,6 +183,21 @@ private final class SessionURLProtocol: URLProtocol {
         XCTAssertFalse(message.contains(key))
         XCTAssertTrue(message.contains("rejected"))
     }
+    func testRejectedFirstKeyFromOllamaIsVisibleInSettings() async throws {
+        let storage = FakeBackendSessionStorage()
+        let disk = try ConversationDisk(directory: directory.appendingPathComponent("ollama"))
+        let ollama = DirectChatStore(storage: disk, readKey: { "" }, router: Ollama(), requiresKey: false, defaultModel: "")
+        let store = try makeStore(storage, ollama: ollama)
+        store.useOllama()
+        SessionURLProtocol.respond = { _ in (401, Data("{}".utf8)) }
+
+        let saved = await store.saveProviderKey("synthetic-openrouter-key")
+
+        XCTAssertFalse(saved)
+        XCTAssertTrue(store.isLocalConversation)
+        XCTAssertTrue(store.error?.contains("OpenRouter rejected this API key") == true)
+        XCTAssertNil(storage.saved)
+    }
     func testLegacyNeonOwnerConnectionRestoresOriginalPin() throws {
         let storage = FakeBackendSessionStorage()
         let legacy = try credentials()
@@ -227,9 +243,12 @@ private final class SessionURLProtocol: URLProtocol {
         XCTAssertEqual(log.requests.first?.httpMethod, "PUT")
         XCTAssertEqual(log.requests.first?.url?.path, "/v1/settings/openrouter-key")
         XCTAssertEqual(log.requests.first?.value(forHTTPHeaderField: "X-OpenChat-Server-ID"), issued.serverID?.pathID)
-        SessionURLProtocol.respond = { request in log.append(request); return (422, Data("{\"error\":\"OpenRouter rejected this key\"}".utf8)) }
-        let rejected = await store.saveProviderKey("synthetic-invalid-provider-key")
+        let rejectedKey = "synthetic-invalid-provider-key"
+        let rejectedBody = try JSONEncoder().encode(["error": rejectedKey])
+        SessionURLProtocol.respond = { request in log.append(request); return (422, rejectedBody) }
+        let rejected = await store.saveProviderKey(rejectedKey)
         XCTAssertFalse(rejected)
+        XCTAssertEqual(store.error, "OpenRouter rejected this API key. Check it and try again.")
         XCTAssertFalse(store.needsBackendConnection)
         XCTAssertFalse(store.authenticationRequired)
         XCTAssertEqual(store.chat(id)?.draft, "Keep this draft")
@@ -240,6 +259,18 @@ private final class SessionURLProtocol: URLProtocol {
         XCTAssertEqual(storage.saved, issued)
         XCTAssertEqual(store.chat(id)?.draft, "Keep this draft")
         XCTAssertEqual(storage.saves, 0)
+    }
+    func testKeySaveRequiresConfiguredAcknowledgement() async throws {
+        let storage = FakeBackendSessionStorage()
+        storage.saved = try credentials()
+        let store = try makeStore(storage)
+        SessionURLProtocol.respond = { _ in (200, Data("{\"configured\":false}".utf8)) }
+
+        let saved = await store.saveProviderKey("synthetic-openrouter-key")
+
+        XCTAssertFalse(saved)
+        XCTAssertFalse(store.hasKey)
+        XCTAssertEqual(store.error, "Neon couldn’t confirm that your API key was saved. Try again.")
     }
     func testDeletingProviderKeyKeepsAuthenticatedHistory() async throws {
         let storage = FakeBackendSessionStorage()
