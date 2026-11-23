@@ -29,7 +29,7 @@ struct TranscriptScrollView<Content: View>: View {
             scrollContent
                 .onScrollGeometryChange(for: TranscriptScrollMetrics.self) { geometry in
                     TranscriptScrollMetrics(offset: geometry.contentOffset.y + geometry.contentInsets.top,
-                                            contentHeight: geometry.contentSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom,
+                                            contentHeight: geometry.contentSize.height + geometry.contentInsets.top,
                                             viewportHeight: geometry.containerSize.height,
                                             viewportWidth: geometry.containerSize.width)
                 } action: { _, next in
