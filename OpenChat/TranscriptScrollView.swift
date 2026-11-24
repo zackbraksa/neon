@@ -68,10 +68,7 @@ struct TranscriptScrollView<Content: View>: View {
 
     private var scrollContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-                content
-                Color.clear.frame(height: 25).id(bottomID)
-            }
+            transcriptStack
             .frame(maxWidth: 780).padding(.horizontal, 24).padding(.top, 12).frame(maxWidth: .infinity)
             .background {
                 if #unavailable(iOS 18.0, macOS 15.0) {
@@ -81,6 +78,20 @@ struct TranscriptScrollView<Content: View>: View {
                 }
             }
         }
+    }
+
+    private var transcriptStack: some View {
+        #if os(macOS)
+        // Measure offscreen messages so the native scrollbar has a stable scroll range.
+        VStack(alignment: .leading, spacing: 22) { transcriptRows }
+        #else
+        LazyVStack(alignment: .leading, spacing: 22) { transcriptRows }
+        #endif
+    }
+
+    @ViewBuilder private var transcriptRows: some View {
+        content
+        Color.clear.frame(height: 25).id(bottomID)
     }
 
     private func requestBottom(_ proxy: ScrollViewProxy, animated: Bool) {
