@@ -59,6 +59,17 @@ private final class SessionURLProtocol: URLProtocol {
 }
 
 @MainActor final class BackendSessionTests: XCTestCase {
+    func testForbiddenPairingSuggestsConnectingToThePrivateNetwork() async throws {
+        SessionURLProtocol.respond = { _ in (403, Data("Forbidden".utf8)) }
+        do {
+            _ = try await BackendSessionClient(session: session).create(key: "sk-or-test", deviceID: UUID())
+            XCTFail("Expected pairing to be blocked")
+        } catch let failure as BackendFailure {
+            XCTAssertEqual(failure.status, 403)
+            XCTAssertTrue(failure.localizedDescription.contains("Tailscale"))
+        }
+    }
+
     private var directory: URL!
     private var session: URLSession!
     private var stores: [ChatStore] = []

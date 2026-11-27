@@ -52,6 +52,45 @@ private struct ReasoningCatalogTransport: DirectChatTransport {
 }
 
 @MainActor final class BackendClientTests: XCTestCase {
+    func testForbiddenSyncExplainsPrivateNetworkWithoutRepeatingTheAlert() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let credentials = try BackendCredentials(address: "https://example.test", token: String(repeating: "t", count: 32))
+        let store = try RemoteChatStore(client: BackendClient(credentials, session: session), directory: directory)
+        defer {
+            store.suspend()
+            session.invalidateAndCancel()
+            StubURLProtocol.handler = nil
+            try? FileManager.default.removeItem(at: directory)
+        }
+        StubURLProtocol.handler = { _ in (403, Data("Forbidden".utf8)) }
+        store.start()
+        await eventually { store.error != nil }
+        XCTAssertTrue(store.error?.contains("Tailscale") == true)
+        XCTAssertTrue(store.connectionStatus.contains("Access blocked"))
+        XCTAssertFalse(store.requiresAuthentication)
+
+        store.error = nil
+        await store.sync()
+        XCTAssertNil(store.error)
+        await store.retryPending()
+        XCTAssertTrue(store.error?.contains("Tailscale") == true)
+
+        let capabilities = try JSONSerialization.data(withJSONObject: ["serverId": UUID().pathID, "push": false, "backgroundJobs": true])
+        StubURLProtocol.handler = { request in
+            switch request.url!.path {
+            case "/v1/capabilities": return (200, capabilities)
+            case "/v1/settings/openrouter-key": return (200, Data("{\"configured\":true}".utf8))
+            default: return (200, Data("[]".utf8))
+            }
+        }
+        await store.sync()
+        XCTAssertEqual(store.connectionStatus, "Synced")
+        XCTAssertNil(store.error)
+    }
+
     func testActivationLoadsEffortsForSavedModelWithoutOpeningPicker() async throws {
         let (facade, remote, transport, directory, session) = try startupCatalogFixture()
         defer { facade.background(); session.invalidateAndCancel(); StubURLProtocol.handler = nil; try? FileManager.default.removeItem(at: directory) }

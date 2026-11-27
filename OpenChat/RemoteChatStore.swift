@@ -23,6 +23,7 @@ final class RemoteChatStore {
     private(set) var requiresAuthentication = false
     var connectionStatus = "Connecting…"
     private(set) var isSyncing = false
+    @ObservationIgnored private var lastSyncFailure: String?
     private var jobs: [UUID: BackendJob] = [:]
     @ObservationIgnored private var metadataTasks: [UUID: (id: UUID, task: Task<Void, Error>)] = [:]
     @ObservationIgnored private var metadataRevisions: [UUID: Int] = [:]
@@ -261,7 +262,7 @@ final class RemoteChatStore {
         rebuild(chat.id); select(chat.id)
         Task { await sync() }
     }
-    func sync() async {
+    func sync(reportRepeatedFailure: Bool = false) async {
         guard foreground, !isSyncing else { return }
         isSyncing = true
         let lifecycle = self.lifecycle
@@ -366,20 +367,36 @@ final class RemoteChatStore {
             if selectedID == nil { select(conversations.first(where: { !$0.isArchived })?.id) }
             conversations.sort { $0.updated > $1.updated }
             connectionStatus = outbox.isEmpty ? "Synced" : "A send needs attention · sync to retry"
+            clearSyncFailure()
             ensureStream()
             NotificationCenter.default.post(name: .backendDidSync, object: nil)
         } catch is CancellationError { }
         catch {
-            if let failure = error as? BackendFailure, failure.status == 401 {
+            guard !Task.isCancelled, self.lifecycle == lifecycle else { return }
+            let failure = error as? BackendFailure
+            if failure?.status == 401 {
                 requireAuthentication()
                 return
             }
-            if !Task.isCancelled { connectionStatus = outbox.isEmpty ? "Offline · showing saved chats" : "Send awaiting confirmation · retry with the same ID" }
-            // Surface actionable server errors; network reconnects remain quiet.
-            if let failure = error as? BackendFailure { self.error = failure.localizedDescription }
+            if !outbox.isEmpty {
+                connectionStatus = "Send awaiting confirmation · retry with the same ID"
+            } else if failure?.status == 403 {
+                connectionStatus = "Access blocked · showing saved chats"
+            } else {
+                connectionStatus = "Offline · showing saved chats"
+            }
+            if let failure, reportRepeatedFailure || failure.message != lastSyncFailure {
+                lastSyncFailure = failure.message
+                self.error = failure.message
+            }
         }
     }
+    private func clearSyncFailure() {
+        if error == lastSyncFailure { error = nil }
+        lastSyncFailure = nil
+    }
     func requireAuthentication() {
+        clearSyncFailure()
         requiresAuthentication = true
         suspend()
         connectionStatus = "Reconnect with your OpenRouter key"
@@ -513,7 +530,7 @@ final class RemoteChatStore {
             for index in saved.indices where chat(saved[index].threadID)?.isArchived != true && !archiveMutations.contains(saved[index].threadID) { saved[index].lastError = nil }
             try saveOutbox(saved)
             for id in Set(saved.map(\.threadID)) where canMutate(id) { rebuild(id) }
-            await sync()
+            await sync(reportRepeatedFailure: true)
         } catch { self.error = error.localizedDescription }
     }
     func removeQueued(_ id: UUID, messageID: UUID) {

@@ -28,6 +28,24 @@ struct BackendFailure: LocalizedError {
     let status: Int
     let message: String
     var errorDescription: String? { message }
+
+    init(status: Int, message: String? = nil) {
+        self.status = status
+        if let message {
+            self.message = message
+            return
+        }
+        self.message = switch status {
+        case 300..<400: "The Neon server redirected the request. Check the server URL in Settings."
+        case 401: "Your Neon session was rejected. Reconnect to your server in Settings."
+        case 403: "The Neon server blocked access (403). If it requires a private network like Tailscale, connect to it and try again."
+        case 408: "The Neon server took too long to respond. Try again."
+        case 429: "The Neon server is receiving too many requests. Wait a moment and try again."
+        case 500..<600: "The Neon server is having trouble responding. Try again in a moment."
+        case 0: "Neon received an unexpected response. Check the server URL and try again."
+        default: "Neon couldn’t complete the request (\(status)). Try again."
+        }
+    }
 }
 struct BackendCapabilities: Decodable { let push: Bool; let backgroundJobs: Bool; let serverId: UUID; let conversationMetadata: Bool?; let archiveBrowsing: Bool?; let conversationDeletion: Bool?; let reasoningEffort: Bool?; let imageInputs: Bool? }
 struct KeyState: Decodable { let configured: Bool }
@@ -181,7 +199,7 @@ final class BackendClient {
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw BackendFailure(status: status, message: (try? JSONDecoder().decode(Failure.self, from: data).error) ?? "Server request failed (\(status)).")
+            throw BackendFailure(status: status, message: try? JSONDecoder().decode(Failure.self, from: data).error)
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
@@ -210,7 +228,7 @@ final class BackendClient {
         request.setValue(String(job.content.utf16.count), forHTTPHeaderField: "Last-Event-ID")
         let (bytes, response) = try await session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw BackendFailure(status: status, message: "Response connection failed (\(status)).") }
+        guard status == 200 else { throw BackendFailure(status: status) }
         var parser = BackendEventParser()
         var line = Data()
         for try await byte in bytes {

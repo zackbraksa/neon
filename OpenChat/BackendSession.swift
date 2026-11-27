@@ -65,13 +65,13 @@ struct BackendSessionClient {
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            let message: String
+            let message: String?
             switch status {
             case 400: message = "Enter a valid OpenRouter API key."
             case 401: message = "OpenRouter rejected this API key. Check it and try again."
             case 429: message = "Too many connection attempts. Please try again shortly."
             case 503: message = "Neon could not verify your key right now. Please retry."
-            default: message = "Neon could not connect (\(status)). Please retry."
+            default: message = nil
             }
             throw BackendFailure(status: status, message: message)
         }
